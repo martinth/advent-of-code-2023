@@ -1,0 +1,12 @@
+[package]
+name = "advent-of-code-2023"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "day_01"
+path = "src/day_01/main.rs"
+
+[dependencies]
+anyhow = "1.0.70"
+regex = "1.10.2"
