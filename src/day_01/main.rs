@@ -4,10 +4,7 @@ use regex::{Captures, Regex};
 
 
 fn word_replacement(line: String) -> String {
-    let r = Regex::new(r"(one|two|three|four|five|six|seven|eight|nine)")
-        .expect("regex is valid");
-
-    r.replace_all(&line, |caps: &Captures| match &caps[0] {
+    let replacer = |num_str: &str| match num_str {
         "one" => "1",
         "two" => "2",
         "three" => "3",
@@ -17,8 +14,23 @@ fn word_replacement(line: String) -> String {
         "seven" => "7",
         "eight" => "8",
         "nine" => "9",
-        _ => panic!("Unexpected word")
-    }).to_string()
+        other => panic!("Unexpected word: {}", other)
+    };
+
+    // replace first number word
+    let first_re = Regex::new(r"(one|two|three|four|five|six|seven|eight|nine)")
+        .expect("valid regex");
+    let replaced = first_re.replace(&line, |caps: &Captures| {
+        replacer(&caps[1])
+    }).to_string();
+
+    // replace last number word
+    let last_re = Regex::new(r"(.*)(one|two|three|four|five|six|seven|eight|nine)")
+        .expect("valid regex");
+    let replaced = last_re.replace(&replaced, |caps: &Captures| {
+        format!("{}{}", caps[1].to_string(), replacer(&caps[2]))
+    });
+    replaced.to_string()
 }
 
 fn calibration_value(line: String) -> Result<u32> {
@@ -32,7 +44,7 @@ fn calibration_value(line: String) -> Result<u32> {
         .unwrap_or(first);
 
     // debugging
-    // println!("{} -> {}{}", line, first, last);
+    println!("{} -> {}{}", line, first, last);
 
     Ok((first * 10) + last)
 }
@@ -78,6 +90,7 @@ fn main() {
 mod tests {
     use crate::solve_01;
     use crate::solve_02;
+    use crate::word_replacement;
 
     #[test]
     fn solve_test_input_part_01() {
@@ -89,5 +102,13 @@ mod tests {
     fn solve_test_input_part_02() {
         let result = solve_02("src/day_01/test_input_part_02.txt").unwrap();
         assert_eq!(result, 281);
+    }
+
+    #[test]
+    fn test_word_replacement() {
+        assert_eq!(word_replacement("twone45sevenine".to_string()), "2ne45seve9");
+        assert_eq!(word_replacement("one23".to_string()), "123");
+        assert_eq!(word_replacement("nothing".to_string()), "nothing");
+        assert_eq!(word_replacement("onetwothree".to_string()), "1two3");
     }
 }
