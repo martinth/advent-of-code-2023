@@ -1,6 +1,6 @@
 use advent_of_code_2023::common::read_valid_lines;
 use anyhow::{Result, Context};
-use regex::{Captures, Regex};
+use regex::{Regex};
 
 
 fn word_replacement(line: String) -> String {
@@ -18,19 +18,31 @@ fn word_replacement(line: String) -> String {
     };
 
     // replace first number word
-    let first_re = Regex::new(r"(one|two|three|four|five|six|seven|eight|nine)")
+    let digit_word_re = Regex::new(r"(one|two|three|four|five|six|seven|eight|nine)")
         .expect("valid regex");
-    let replaced = first_re.replace(&line, |caps: &Captures| {
-        replacer(&caps[1])
-    }).to_string();
 
-    // replace last number word
-    let last_re = Regex::new(r"(.*)(one|two|three|four|five|six|seven|eight|nine)")
-        .expect("valid regex");
-    let replaced = last_re.replace(&replaced, |caps: &Captures| {
-        format!("{}{}", caps[1].to_string(), replacer(&caps[2]))
-    });
-    replaced.to_string()
+    let mut copy = line.clone();
+    let mut matches = digit_word_re.find_iter(&line);
+    let first_match = matches.next();
+    let last_match = matches.last();
+
+    let mut line2 = if let Some(last_match) = last_match {
+        copy.replace_range(last_match.range(), replacer(last_match.as_str()));
+        copy
+    } else {
+        copy
+    };
+
+    let mut line2 = if let Some(first_match) = first_match {
+        line2.replace_range(first_match.range(), replacer(first_match.as_str()));
+        line2
+    } else {
+        line2
+    };
+
+
+
+    line2
 }
 
 fn calibration_value(line: String) -> Result<u32> {
