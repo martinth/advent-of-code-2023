@@ -2,47 +2,49 @@ use advent_of_code_2023::common::read_valid_lines;
 use anyhow::{Result, Context};
 use regex::{Regex};
 
+#[macro_use]
+extern crate simple_log;
 
-fn word_replacement(line: String) -> String {
-    let replacer = |num_str: &str| match num_str {
-        "one" => "1",
-        "two" => "2",
-        "three" => "3",
-        "four" => "4",
-        "five" => "5",
-        "six" => "6",
-        "seven" => "7",
-        "eight" => "8",
-        "nine" => "9",
-        other => panic!("Unexpected word: {}", other)
+fn calibration_value_words(line: String) -> Result<u32> {
+    let translator = |num_str: &str| match num_str {
+        "one" => 1,
+        "two" => 2,
+        "three" => 3,
+        "four" => 4,
+        "five" => 5,
+        "six" => 6,
+        "seven" => 7,
+        "eight" => 8,
+        "nine" => 9,
+        "1" => 1,
+        "2" => 2,
+        "3" => 3,
+        "4" => 4,
+        "5" => 5,
+        "6" => 6,
+        "7" => 7,
+        "8" => 8,
+        "9" => 9,
+        other => panic!("Unexpected input: {}", other)
     };
 
     // replace first number word
-    let digit_word_re = Regex::new(r"(one|two|three|four|five|six|seven|eight|nine)")
-        .expect("valid regex");
+    let base_regex = r"(1|2|3|4|5|6|7|8|9|one|two|three|four|five|six|seven|eight|nine)";
+    let first = Regex::new(base_regex)
+        .expect("valid regex")
+        .captures(&line)
+        .and_then(|caps| caps.get(1))
+        .map(|mat| translator(&line[mat.range()]))
+        .context("not even one digit found")?;
 
-    let mut copy = line.clone();
-    let mut matches = digit_word_re.find_iter(&line);
-    let first_match = matches.next();
-    let last_match = matches.last();
+    let last = Regex::new(format!(".*{}", base_regex).as_str())
+        .expect("valid regex")
+        .captures(&line)
+        .and_then(|caps| caps.get(1))
+        .map(|met| translator(&line[met.range()]))
+        .unwrap_or(first);
 
-    let mut line2 = if let Some(last_match) = last_match {
-        copy.replace_range(last_match.range(), replacer(last_match.as_str()));
-        copy
-    } else {
-        copy
-    };
-
-    let mut line2 = if let Some(first_match) = first_match {
-        line2.replace_range(first_match.range(), replacer(first_match.as_str()));
-        line2
-    } else {
-        line2
-    };
-
-
-
-    line2
+    Ok((first * 10) + last)
 }
 
 fn calibration_value(line: String) -> Result<u32> {
@@ -54,9 +56,6 @@ fn calibration_value(line: String) -> Result<u32> {
     let last = digits.last()
         .map(|c| c.to_digit(10).unwrap())
         .unwrap_or(first);
-
-    // debugging
-    println!("{} -> {}{}", line, first, last);
 
     Ok((first * 10) + last)
 }
@@ -81,20 +80,19 @@ fn solve_02(filename: &str) -> Result<u32> {
     let lines = read_valid_lines(filename);
     let mut sum: u32 = 0;
     for line in lines {
-        print!("{} -> ", line);
-        sum += calibration_value(word_replacement(line))?
+        sum += calibration_value_words(line)?
     }
     Ok(sum)
 }
 
 fn main() {
+    simple_log::quick!("info");
+
     let result_1 = solve_01("src/day_01/input.txt");
     let result_2 = solve_02("src/day_01/input.txt");
 
-    println!("Result part 1: {}", result_1.expect("result 1"));
-
-    // TODO: this is not giving the correct answer, according to the site but the test passes and it looks all correct
-    println!("Result part 2: {}", result_2.expect("result 2"));
+    info!("Result part 1: {}", result_1.expect("result 1"));
+    info!("Result part 2: {}", result_2.expect("result 2"));
 }
 
 
@@ -102,7 +100,7 @@ fn main() {
 mod tests {
     use crate::solve_01;
     use crate::solve_02;
-    use crate::word_replacement;
+    use crate::calibration_value_words;
 
     #[test]
     fn solve_test_input_part_01() {
@@ -117,10 +115,14 @@ mod tests {
     }
 
     #[test]
-    fn test_word_replacement() {
-        assert_eq!(word_replacement("twone45sevenine".to_string()), "2ne45seve9");
-        assert_eq!(word_replacement("one23".to_string()), "123");
-        assert_eq!(word_replacement("nothing".to_string()), "nothing");
-        assert_eq!(word_replacement("onetwothree".to_string()), "1two3");
+    fn test_calibration_value_words() {
+        assert_eq!(calibration_value_words("two".to_string()).unwrap(), 22);
+        assert_eq!(calibration_value_words("2".to_string()).unwrap(), 22);
+        assert_eq!(calibration_value_words("21".to_string()).unwrap(), 21);
+        assert_eq!(calibration_value_words("twone45sevenine".to_string()).unwrap(), 29);
+        assert_eq!(calibration_value_words("one23".to_string()).unwrap(), 13);
+        assert_eq!(calibration_value_words("onetwothree".to_string()).unwrap(), 13);
+        assert_eq!(calibration_value_words("eighthree".to_string()).unwrap(), 83);
+        assert_eq!(calibration_value_words("sevenine".to_string()).unwrap(), 79);
     }
 }
