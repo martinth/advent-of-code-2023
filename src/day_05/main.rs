@@ -1,6 +1,6 @@
+use std::collections::HashSet;
 use anyhow::{Result, anyhow};
 use indicatif::{ProgressBar, ProgressStyle};
-use itertools::Itertools;
 use crate::parse::{Mapping};
 
 #[macro_use]
@@ -103,7 +103,6 @@ mod parse {
 
 impl Mapping {
     pub fn map(self: &mut Self, input: u64) -> u64 {
-        // I tried memoization here, but that blows up for part 2 since it uses >15GB memory
         for range in self.ranges.iter() {
             if range.source.contains(&input) {
                 let offset = input - range.source.start;
@@ -114,53 +113,76 @@ impl Mapping {
         // no mapping found, input maps to output
         input
     }
+
+    pub fn map_rev(self: &Self, input: u64) -> u64 {
+        for range in self.ranges.iter() {
+            if range.dest.contains(&input) {
+                let offset = input - range.dest.start;
+                return range.source.start + offset
+            }
+        }
+        input
+    }
 }
 
 fn solve_part_1(filename: &str) -> Result<u64> {
-    // need mutability b/c of internal caching
-    let mut input = parse::parse_input(filename)?;
+    let input = parse::parse_input(filename)?;
 
-    let mut lowest: Option<u64> = None;
-    for seed in input.seeds {
-        let mut current_number = seed;
-        for mapping in input.mappings.iter_mut() {
-            let result = mapping.map(current_number);
+    let limit: u64 = input.mappings
+        .last().expect("at least one mapping")
+        .ranges.iter()
+        .map(|r| r.dest.end)
+        .max().expect("a maximum value");
+
+    let seeds: HashSet<u64> = HashSet::from_iter(input.seeds.into_iter());
+    for dest in 0..limit {
+        let mut current_number = dest;
+
+        for mapping in input.mappings.iter().rev() {
+            let result = mapping.map_rev(current_number);
             current_number = result
         }
-        lowest.replace(u64::min(current_number, lowest.unwrap_or(current_number)));
+        if seeds.contains(&current_number) {
+            return Ok(dest)
+        }
     }
 
-    lowest.ok_or(anyhow!("No lowest number found"))
+    Err(anyhow!("no possible seed value found"))
 }
 
-// TODO: this currently takes 4,5 minutes, maybe we can make it faster
 fn solve_part_2(filename: &str) -> Result<u64> {
-    // need mutability b/c of internal caching
-    let mut input = parse::parse_input(filename)?;
+    let input = parse::parse_input(filename)?;
 
-    let total: u64 = input.seed_ranges.clone().into_iter()
-        .map(|range| range.try_len().expect("size hint") as u64)
-        .sum();
-    let bar = ProgressBar::new(total);
+    let limit: u64 = input.mappings
+        .last().expect("at least one mapping")
+        .ranges.iter()
+        .map(|r| r.dest.end)
+        .max().expect("a maximum value");
+
+    let bar = ProgressBar::new(limit);
     bar.set_style(ProgressStyle::with_template("[{elapsed_precise}/{eta_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7} {msg}")
         .unwrap()
         .progress_chars("##-"));
 
-    let mut lowest: Option<u64> = None;
-    let seed_iters = input.seed_ranges.into_iter()
-        .flat_map(|range| range.into_iter());
-    for seed in seed_iters.into_iter() {
-        let mut current_number = seed;
-        for mapping in input.mappings.iter_mut() {
-            let result = mapping.map(current_number);
+    for dest in 0..limit {
+        let mut current_number = dest;
+
+        for mapping in input.mappings.iter().rev() {
+            let result = mapping.map_rev(current_number);
             current_number = result
         }
-        lowest.replace(u64::min(current_number, lowest.unwrap_or(current_number)));
+
+        for seed_range in &input.seed_ranges {
+            if seed_range.contains(&current_number) {
+                return Ok(dest)
+            }
+        }
+
         bar.inc(1)
     }
 
     bar.finish();
-    lowest.ok_or(anyhow!("No lowest number found"))
+    Err(anyhow!("no possible seed value found"))
 }
 
 fn main() -> Result<()> {
@@ -209,5 +231,28 @@ mod tests {
         assert_eq!(seed_to_soil.map(14), 14);
         assert_eq!(seed_to_soil.map(55), 57);
         assert_eq!(seed_to_soil.map(13), 13);
+    }
+
+    #[test]
+    fn validate_rev_range_mappings() {
+        let mut input = parse::parse_input("src/day_05/test_input.txt")
+            .expect("valid input");
+        let seed_to_soil: &mut Mapping = input.mappings.get_mut(0).unwrap();
+
+        assert_eq!(seed_to_soil.map_rev(0), 0);
+        assert_eq!(seed_to_soil.map_rev(1), 1);
+        assert_eq!(seed_to_soil.map_rev(48), 48);
+        assert_eq!(seed_to_soil.map_rev(49), 49);
+        assert_eq!(seed_to_soil.map_rev(52), 50);
+        assert_eq!(seed_to_soil.map_rev(53), 51);
+        assert_eq!(seed_to_soil.map_rev(98), 96);
+        assert_eq!(seed_to_soil.map_rev(99), 97);
+        assert_eq!(seed_to_soil.map_rev(50), 98);
+        assert_eq!(seed_to_soil.map_rev(51), 99);
+
+        assert_eq!(seed_to_soil.map_rev(81), 79);
+        assert_eq!(seed_to_soil.map_rev(14), 14);
+        assert_eq!(seed_to_soil.map_rev(57), 55);
+        assert_eq!(seed_to_soil.map_rev(13), 13);
     }
 }
