@@ -1,4 +1,6 @@
 use anyhow::{Result, anyhow};
+use indicatif::{ProgressBar, ProgressStyle};
+use itertools::Itertools;
 use crate::parse::{Mapping};
 
 #[macro_use]
@@ -14,7 +16,30 @@ mod parse {
     #[derive(Debug)]
     pub struct Input {
         pub seeds: Vec<u64>,
+        pub seed_ranges: Vec<Range<u64>>,
         pub mappings: Vec<Mapping>
+    }
+
+    impl Input {
+        pub fn new(seeds: Vec<u64>, mappings: Vec<Mapping>) -> Self {
+            assert!(seeds.len() % 2 == 0);
+
+            let seed_ranges = seeds.chunks(2)
+                .map(|chunk| {
+                    let start = *chunk.get(0).expect("slice of size 2");
+                    let length = *chunk.get(1).expect("slice of size 2");
+                    start..(start + length)
+                })
+                .collect();
+
+
+            Input {
+                seeds,
+                seed_ranges,
+                mappings
+            }
+        }
+
     }
 
     #[derive(Debug)]
@@ -72,31 +97,24 @@ mod parse {
             })
             .collect();
 
-        Ok(Input {
-            seeds,
-            mappings
-        })
+        Ok(Input::new(seeds, mappings))
     }
 }
 
 impl Mapping {
     pub fn map(self: &mut Self, input: u64) -> u64 {
-        *self.map_cache.entry(input)
-            .or_insert_with(|| {
-                for range in self.ranges.iter() {
-                    if range.source.contains(&input) {
-                        let offset = input - range.source.start;
-                        return range.dest.start + offset
-                    }
-                }
+        // I tried memoization here, but that blows up for part 2 since it uses >15GB memory
+        for range in self.ranges.iter() {
+            if range.source.contains(&input) {
+                let offset = input - range.source.start;
+                return range.dest.start + offset
+            }
+        }
 
-                // no mapping found, input maps to output
-                input
-            })
+        // no mapping found, input maps to output
+        input
     }
 }
-
-
 
 fn solve_part_1(filename: &str) -> Result<u64> {
     // need mutability b/c of internal caching
@@ -115,17 +133,40 @@ fn solve_part_1(filename: &str) -> Result<u64> {
     lowest.ok_or(anyhow!("No lowest number found"))
 }
 
+// TODO: this currently takes 4,5 minutes, maybe we can make it faster
 fn solve_part_2(filename: &str) -> Result<u64> {
-    let input = parse::parse_input(filename)?;
-    println!("{:?}", input);
+    // need mutability b/c of internal caching
+    let mut input = parse::parse_input(filename)?;
 
-    todo!()
+    let total: u64 = input.seed_ranges.clone().into_iter()
+        .map(|range| range.try_len().expect("size hint") as u64)
+        .sum();
+    let bar = ProgressBar::new(total);
+    bar.set_style(ProgressStyle::with_template("[{elapsed_precise}/{eta_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7} {msg}")
+        .unwrap()
+        .progress_chars("##-"));
+
+    let mut lowest: Option<u64> = None;
+    let seed_iters = input.seed_ranges.into_iter()
+        .flat_map(|range| range.into_iter());
+    for seed in seed_iters.into_iter() {
+        let mut current_number = seed;
+        for mapping in input.mappings.iter_mut() {
+            let result = mapping.map(current_number);
+            current_number = result
+        }
+        lowest.replace(u64::min(current_number, lowest.unwrap_or(current_number)));
+        bar.inc(1)
+    }
+
+    bar.finish();
+    lowest.ok_or(anyhow!("No lowest number found"))
 }
 
 fn main() -> Result<()> {
     simple_log::quick!("info");
     info!("Result part 1: {}", solve_part_1("src/day_05/input.txt")?);
-    //info!("Result part 2: {}", solve_part_2("src/day_05/input.txt")?);
+    info!("Result part 2: {}", solve_part_2("src/day_05/input.txt")?);
     Ok(())
 }
 
@@ -144,7 +185,7 @@ mod tests {
     #[test]
     fn solve_test_input_2() {
         let result = solve_part_2("src/day_05/test_input.txt").unwrap();
-        assert_eq!(result, 42);
+        assert_eq!(result, 46);
     }
 
     #[test]
