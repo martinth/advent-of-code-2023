@@ -1,12 +1,14 @@
 use anyhow::{Result, anyhow};
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
+use rayon::prelude::*;
 use crate::parse::{Mapping};
 
 #[macro_use]
 extern crate simple_log;
 
 mod parse {
+    use std::cmp::Ordering;
     use std::collections::HashMap;
     use aoc_parse::{parser, prelude::*};
     use anyhow::{Result, Context};
@@ -46,10 +48,30 @@ mod parse {
     pub struct Mapping {
         pub name: String,
         pub ranges: Vec<MappingRange>,
-        pub map_cache: HashMap<u64, u64>
     }
 
-    #[derive(Debug)]
+    impl Mapping {
+        fn new(name: String, ranges: Vec<MappingRange>) -> Self {
+            Mapping {
+                name,
+                ranges,
+            }
+        }
+
+        pub fn map(self: &Self, input: u64) -> u64 {
+            for range in self.ranges.iter() {
+                if range.source.contains(&input) {
+                    let offset = input - range.source.start;
+                    return range.dest.start + offset
+                }
+            }
+
+            // no mapping found, input maps to output
+            input
+        }
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
     pub struct MappingRange {
         pub source: Range<u64>,
         pub dest: Range<u64>
@@ -93,7 +115,7 @@ mod parse {
                         MappingRange::new(source_start, dest_start, length)
                     })
                     .collect();
-                Mapping { name, ranges, map_cache: HashMap::new() }
+                Mapping::new(name, ranges)
             })
             .collect();
 
@@ -101,29 +123,14 @@ mod parse {
     }
 }
 
-impl Mapping {
-    pub fn map(self: &mut Self, input: u64) -> u64 {
-        // I tried memoization here, but that blows up for part 2 since it uses >15GB memory
-        for range in self.ranges.iter() {
-            if range.source.contains(&input) {
-                let offset = input - range.source.start;
-                return range.dest.start + offset
-            }
-        }
-
-        // no mapping found, input maps to output
-        input
-    }
-}
-
 fn solve_part_1(filename: &str) -> Result<u64> {
     // need mutability b/c of internal caching
-    let mut input = parse::parse_input(filename)?;
+    let input = parse::parse_input(filename)?;
 
     let mut lowest: Option<u64> = None;
     for seed in input.seeds {
         let mut current_number = seed;
-        for mapping in input.mappings.iter_mut() {
+        for mapping in input.mappings.iter() {
             let result = mapping.map(current_number);
             current_number = result
         }
@@ -133,7 +140,6 @@ fn solve_part_1(filename: &str) -> Result<u64> {
     lowest.ok_or(anyhow!("No lowest number found"))
 }
 
-// TODO: this currently takes 4,5 minutes, maybe we can make it faster
 fn solve_part_2(filename: &str) -> Result<u64> {
     // need mutability b/c of internal caching
     let mut input = parse::parse_input(filename)?;
@@ -146,18 +152,27 @@ fn solve_part_2(filename: &str) -> Result<u64> {
         .unwrap()
         .progress_chars("##-"));
 
-    let mut lowest: Option<u64> = None;
-    let seed_iters = input.seed_ranges.into_iter()
-        .flat_map(|range| range.into_iter());
-    for seed in seed_iters.into_iter() {
-        let mut current_number = seed;
-        for mapping in input.mappings.iter_mut() {
+    let iter = input.seed_ranges.par_iter()
+        .flat_map_iter(|range| range.clone().into_iter());
+
+    let lowest = iter.fold(|| None, |lowest, seed: u64 | {
+        let mut current_number = seed.clone();
+        for mapping in input.mappings.iter() {
             let result = mapping.map(current_number);
             current_number = result
         }
-        lowest.replace(u64::min(current_number, lowest.unwrap_or(current_number)));
-        bar.inc(1)
-    }
+        bar.inc(1);
+        match lowest {
+            None => Some(current_number),
+            Some(lowest) => Some(u64::min(lowest, current_number))
+        }
+    }).reduce(|| None, |lowest_a, lowest_b| {
+        if lowest_a.is_some() && lowest_b.is_some() {
+            Some(u64::min(lowest_a.unwrap(), lowest_b.unwrap()))
+        } else {
+            lowest_a.or(lowest_b)
+        }
+    });
 
     bar.finish();
     lowest.ok_or(anyhow!("No lowest number found"))
@@ -204,7 +219,6 @@ mod tests {
         assert_eq!(seed_to_soil.map(97), 99);
         assert_eq!(seed_to_soil.map(98), 50);
         assert_eq!(seed_to_soil.map(99), 51);
-
         assert_eq!(seed_to_soil.map(79), 81);
         assert_eq!(seed_to_soil.map(14), 14);
         assert_eq!(seed_to_soil.map(55), 57);
