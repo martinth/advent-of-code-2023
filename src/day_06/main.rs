@@ -1,3 +1,4 @@
+use std::ops::{RangeInclusive};
 use anyhow::{Result};
 use crate::parse::Race;
 
@@ -65,10 +66,30 @@ mod parse {
 fn distance_traveled(x: &u64, race_time: &u64) -> u64 {
     let travel_time = race_time - x;
     let start_speed = x;
-    start_speed * travel_time
+    start_speed * travel_time // x * (race_time - x)
+}
+
+fn win_possible_interval(min_distance: &u64, race_time: &u64) -> RangeInclusive<u64> {
+    // f(x) = x * (T-x)         where x = hold time and T is total race time
+    //  we are only interested in solutions where we would win, so:
+    // f(x) = (x * (T-x)) - D   where D is the record to beat
+    //  solving for 0 gives us two solutions (https://www.wolframalpha.com/input?i=0+%3D+%28x+*+%28T-x%29%29+-+r)
+    // x = 1/2 (T - sqrt(T^2 - 4 D))
+    // x = 1/2 (sqrt(T^2 - 4 D) + T)
+
+    let sqrt = |n: u64| (n as f64).sqrt();
+
+    let inner = sqrt(race_time.pow(2) - 4 * min_distance);
+    let race_time = *race_time as f64;
+
+    let result_1 = 0.5 * (race_time - inner);
+    let result_2 = 0.5 * (inner + race_time);
+
+    (result_1.ceil().round() as u64)..=(result_2.floor() as u64)
 }
 
 fn winning_wait_times(race: &Race) -> u32 {
+
     (0..race.time)
         .map(|hold_time| distance_traveled(&hold_time, &race.time))
         .filter(|distance| distance > &race.record_distance)
@@ -98,7 +119,7 @@ fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{distance_traveled, solve_part_1, solve_part_2};
+    use crate::{distance_traveled, solve_part_1, solve_part_2, win_possible_interval};
 
     #[test]
     fn solve_test_input_1() {
@@ -122,5 +143,12 @@ mod tests {
         assert_eq!(distance_traveled(&5, &7), 10);
         assert_eq!(distance_traveled(&6, &7), 6);
         assert_eq!(distance_traveled(&7, &7), 0);
+    }
+
+    #[test]
+    fn test_win_possible_interval() {
+        assert_eq!(win_possible_interval(&9, &7), 2..=5);
+        assert_eq!(win_possible_interval(&40, &15), 4..=11);
+        assert_eq!(win_possible_interval(&200, &30), 10..=20);
     }
 }
