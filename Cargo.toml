@@ -23,6 +23,10 @@ path = "src/day_04/main.rs"
 name = "day_05"
 path = "src/day_05/main.rs"
 
+[[bin]]
+name = "day_06"
+path = "src/day_06/main.rs"
+
 [dependencies]
 anyhow = "1.0.70"
 aoc-parse = "0.2.17"
