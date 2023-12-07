@@ -17,7 +17,7 @@ The (Rust specific) things I learned each challenge:
   - How to use the Regex crate
 
 - Day 2
-  - TBD
+  - The aoc_parse create is super nice for parsing inputs
 
 - Day 3
   - TBD
