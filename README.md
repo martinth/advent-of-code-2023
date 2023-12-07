@@ -14,7 +14,7 @@ The input(s) are not checked in to not spoil any fun ;)
 The (Rust specific) things I learned each challenge:
 
 - Day 1
-  - TBD 
+  - How to use the Regex crate
 
 - Day 2
   - TBD
