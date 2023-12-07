@@ -20,7 +20,7 @@ The (Rust specific) things I learned each challenge:
   - The aoc_parse create is super nice for parsing inputs
 
 - Day 3
-  - TBD
+  - How to use a Box to return an Iterator from a function 
 
 - Day 4
   - TBD
