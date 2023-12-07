@@ -14,13 +14,13 @@ The input(s) are not checked in to not spoil any fun ;)
 The (Rust specific) things I learned each challenge:
 
 - Day 1
-  - TBD 
+  - How to use the Regex crate
 
 - Day 2
-  - TBD
+  - The aoc_parse create is super nice for parsing inputs
 
 - Day 3
-  - TBD
+  - How to use a Box to return an Iterator from a function 
 
 - Day 4
   - TBD
