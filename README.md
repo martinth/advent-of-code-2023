@@ -23,10 +23,10 @@ The (Rust specific) things I learned each challenge:
   - How to use a Box to return an Iterator from a function 
 
 - Day 4
-  - TBD
+  - The Entry API into maps
 
 - Day 5
-  - TBD
+  - How to have a progress bar. And that Rust is really fast. 
 
 - Day 6
-  - TBD 
+  - I remembered some almost forgotten high school math
