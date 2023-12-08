@@ -216,7 +216,7 @@ mod parse {
         pub hands: Vec<Hand>
     }
 
-    pub fn parse_hand(hand: &str, with_joker: bool) -> Hand {
+    pub(crate) fn parse_hand(hand: &str, with_joker: bool) -> Hand {
         let parser = parser!(cards:{
             "A" => Card::Ass,
             "K" => Card::King,
@@ -299,7 +299,7 @@ fn solve_part_2(filename: &str) -> Result<u32> {
 fn main() -> Result<()> {
     simple_log::quick!("info");
 
-    //info!("Result part 1: {}", solve_part_1("src/day_07/input.txt")?);
+    info!("Result part 1: {}", solve_part_1("src/day_07/input.txt")?);
     info!("Result part 2: {}", solve_part_2("src/day_07/input.txt")?);
     Ok(())
 }
@@ -308,7 +308,7 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use crate::{solve_part_1, solve_part_2};
-    use crate::parse::{HandType, parse_hand, parse_input, type_with_joker};
+    use crate::parse::{HandType, parse_hand, parse_input};
 
     #[test]
     fn solve_test_input_1() {
