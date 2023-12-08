@@ -27,9 +27,14 @@ path = "src/day_05/main.rs"
 name = "day_06"
 path = "src/day_06/main.rs"
 
+[[bin]]
+name = "day_07"
+path = "src/day_07/main.rs"
+
 [dependencies]
 anyhow = "1.0.70"
 aoc-parse = "0.2.17"
+enum-ordinalize = "4.2.1"
 indicatif = "0.17.7"
 itertools = "0.12.0"
 rayon = "1.8.0"
