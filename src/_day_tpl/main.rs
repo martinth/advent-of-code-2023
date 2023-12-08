@@ -7,12 +7,20 @@ mod parse {
     use anyhow::{Result, Context};
     use std::fs::read_to_string;
 
+    #[derive(Debug)]
+    pub struct Input {
 
-    pub fn parse_input(filename: &str) -> Result<_> {
-        let parser = parser!();
+    }
+
+    pub fn parse_input(filename: &str) -> Result<Input> {
+        let parser = parser!(lines(""));
 
         let raw_data = read_to_string(filename)?;
-        parser.parse(&raw_data).context("parse error")
+        let raw_parsed = parser.parse(&raw_data).context("parse error")?;
+
+        Ok(Input {
+
+        })
     }
 }
 
