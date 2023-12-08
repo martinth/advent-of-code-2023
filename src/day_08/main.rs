@@ -1,6 +1,6 @@
 use std::iter::repeat;
 use anyhow::{Result};
-use crate::parse::Move;
+use crate::parse::{Input, Move};
 
 #[macro_use]
 extern crate simple_log;
@@ -36,7 +36,7 @@ mod parse {
                 "R" => Move::Right
             }+)
             line("")
-            lines(name:string(upper+) " = (" left:string(upper+) ", " right:string(upper+) ")")
+            lines(name:string(alnum+) " = (" left:string(alnum+) ", " right:string(alnum+) ")")
         );
 
         let raw_data = read_to_string(filename)?;
@@ -59,11 +59,6 @@ mod parse {
     }
 }
 
-#[derive(Debug)]
-pub struct Shortcut {
-    left: Option<String>,
-    right: Option<String>,
-}
 
 fn solve_part_1(filename: &str) -> Result<u32> {
     let input = parse::parse_input(filename)?;
@@ -75,9 +70,8 @@ fn solve_part_1(filename: &str) -> Result<u32> {
 
     let mut current = &"AAA".to_string();
     while current != &"ZZZ".to_string() {
-        let node = input.nodes.get(current)
-            .expect("node to exist");
-        let action = moves.next().expect("another move");
+        let node = input.nodes.get(current).expect("node exists");
+        let action = moves.next().expect("a next move");
         let next = match action  {
             Move::Left => &node.left,
             Move::Right => &node.right,
@@ -92,40 +86,68 @@ fn solve_part_1(filename: &str) -> Result<u32> {
     Ok(steps)
 }
 
-fn solve_part_2(filename: &str) -> Result<u32> {
-    let input = parse::parse_input(filename)?;
-    println!("{:?}", input);
+fn loop_until_hit(input: &Input, start: &String, suffix: &str) -> u64 {
+    let mut loops = 0_u64;
+    let mut current = start;
+    loop {
+        loops += 1;
+        for direction in input.moves.iter() {
+            let node = input.nodes.get(current).expect("node exists");
 
-    todo!()
+            let next = match direction  {
+                Move::Left => &node.left,
+                Move::Right => &node.right,
+            };
+
+            current = next;
+        }
+        if current.ends_with(suffix) {
+            return loops
+        }
+    }
+}
+
+fn solve_part_2(filename: &str) -> Result<u64> {
+    let input = parse::parse_input(filename)?;
+
+    let start: Vec<&String> = input.nodes.keys()
+        .filter(|name| name.ends_with("A"))
+        .collect();
+
+    let mut total = 1;
+    for start in start.into_iter() {
+        total *= loop_until_hit(&input, start, "Z");
+    }
+
+    Ok(total * input.moves.len() as u64)
 }
 
 fn main() -> Result<()> {
-    simple_log::quick!("debug");
+    simple_log::quick!("info");
     info!("Result part 1: {}", solve_part_1("src/day_08/input.txt")?);
-    //info!("Result part 2: {}", solve_part_2("src/day_xx/input.txt")?);
+    info!("Result part 2: {}", solve_part_2("src/day_08/input.txt")?);
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {
     use crate::{solve_part_1, solve_part_2};
 
     #[test]
-    fn solve_test_input_1_0() {
-        let result = solve_part_1("src/day_08/test_input_0.txt").unwrap();
+    fn solve_test_input_1_1() {
+        let result = solve_part_1("src/day_08/test_input_1_1.txt").unwrap();
         assert_eq!(result, 2);
     }
 
     #[test]
-    fn solve_test_input_1_1() {
-        let result = solve_part_1("src/day_08/test_input_1.txt").unwrap();
+    fn solve_test_input_1_2() {
+        let result = solve_part_1("src/day_08/test_input_1_2.txt").unwrap();
         assert_eq!(result, 6);
     }
 
     #[test]
-    fn solve_test_input_() {
-        let result = solve_part_2("src/day_08/test_input.txt").unwrap();
-        assert_eq!(result, 42);
+    fn solve_test_input_2_1() {
+        let result = solve_part_2("src/day_08/test_input_2_1.txt").unwrap();
+        assert_eq!(result, 6);
     }
 }
