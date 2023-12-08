@@ -30,3 +30,7 @@ The (Rust specific) things I learned each challenge:
 
 - Day 6
   - I remembered some almost forgotten high school math
+
+- Day 7:
+  - How to implement (Part)Eq and (Partial)Ord
+  - That I should take the AoC instructions absolutely literally and assume nothing
