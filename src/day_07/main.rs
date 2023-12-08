@@ -31,43 +31,15 @@ mod parse {
         Ass,
     }
 
-
-    #[derive(Debug, Eq, PartialEq)]
+    #[derive(Debug, Eq, PartialEq, Ordinalize, PartialOrd, Ord)]
     pub enum HandType {
-        HighCard(Card),
+        HighCard,
         OnePair,
         TwoPairs,
         ThreeOfAKind,
         FullHouse,
         FourOfAKind,
         FiveOfAKind,
-    }
-
-    impl HandType {
-        fn ordinal(self: &Self) -> i8 {
-            match self {
-                HandType::HighCard(card) => card.ordinal(),
-                HandType::OnePair => 20,
-                HandType::TwoPairs => 21,
-                HandType::ThreeOfAKind => 22,
-                HandType::FullHouse => 23,
-                HandType::FourOfAKind => 24,
-                HandType::FiveOfAKind => 35,
-            }
-        }
-    }
-
-    impl PartialOrd for HandType {
-        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            let result = self.ordinal().partial_cmp(&other.ordinal());
-            println!("HandType.partial_cmp: {:?} {:?} {:?}", self.ordinal(), result, other.ordinal());
-            result
-        }
-    }
-    impl Ord for HandType {
-        fn cmp(&self, other: &Self) -> Ordering {
-            self.partial_cmp(other).unwrap()
-        }
     }
 
     #[derive(Debug)]
@@ -79,7 +51,7 @@ mod parse {
 
     impl Hand {
         pub fn new(cards: Vec<Card>, bid: u32) -> Self {
-            // get a copy of the cards since we need to store them in original order
+            // get a copy of the cards as array for passing on
             let cards_org_order: [Card; 5] = cards.clone().try_into()
                 .expect("infallible");
 
@@ -95,7 +67,7 @@ mod parse {
                 (3, 1) => HandType::ThreeOfAKind,
                 (2, 2) => HandType::TwoPairs,
                 (2, 1) => HandType::OnePair,
-                (1, _) => HandType::HighCard(*cards.iter().max().expect("largest card")),
+                (1, _) => HandType::HighCard,
                 (_ ,_) => panic!("Unexpected pair counts: {}/{}", longest, second_longest)
             };
 
@@ -117,7 +89,6 @@ mod parse {
     impl PartialOrd for Hand {
         fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
             let by_type = self.hand_type.cmp(&other.hand_type);
-            println!("Hand.partial_cmp - {:?} {:?} {:?}",  self.hand_type, by_type, other.hand_type);
 
             match by_type {
                 Ordering::Less => Some(by_type),
@@ -125,9 +96,7 @@ mod parse {
                 Ordering::Equal => {
                     for (c_self, c_other) in self.cards.iter().zip(other.cards.iter()) {
                         if c_self != c_other {
-                            let result = c_self.partial_cmp(c_other);
-                            println!("  cards {}: {:?} {:?} {:?} ", self, c_self, result, c_other);
-                            return result
+                            return c_self.partial_cmp(c_other);
                         }
                     }
                     Some(Ordering::Equal)
@@ -240,10 +209,6 @@ fn solve_part_2(filename: &str) -> Result<u32> {
 fn main() -> Result<()> {
     simple_log::quick!("info");
 
-    // wrong:
-    // 251544771
-    // 249643397
-    // 249455729
     info!("Result part 1: {}", solve_part_1("src/day_07/input.txt")?);
     //info!("Result part 2: {}", solve_part_2("src/day_07/input.txt")?);
     Ok(())
@@ -266,11 +231,7 @@ mod tests {
     //     let result = solve_part_2("src/day_07/test_input.txt").unwrap();
     //     assert_eq!(result, 42);
     // }
-    #[test]
-    fn fail() {
-        parse_hand("56566");
-        assert!(false)
-    }
+
 
     #[test]
     fn test_hand_type() {
@@ -288,7 +249,7 @@ mod tests {
     fn test_tie_breaking() {
         assert!(parse_hand("AAAAQ") > parse_hand("AAAAJ"));
         assert!(parse_hand("AAAQQ") > parse_hand("AAAJJ"));
-        assert!(parse_hand("264AJ") > parse_hand("269J8"))
+        assert!(parse_hand("264AJ") < parse_hand("269J8"))
     }
 
     #[test]
