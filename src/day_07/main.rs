@@ -1,4 +1,5 @@
 use anyhow::{Result};
+use crate::parse::Input;
 
 #[macro_use]
 extern crate simple_log;
@@ -16,6 +17,7 @@ mod parse {
 
     #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Ordinalize, Copy, Clone)]
     pub enum Card {
+        Joker,
         Two,
         Three,
         Four,
@@ -31,7 +33,7 @@ mod parse {
         Ass,
     }
 
-    #[derive(Debug, Eq, PartialEq, Ordinalize, PartialOrd, Ord)]
+    #[derive(Debug, Eq, PartialEq, Ordinalize, PartialOrd, Ord, Clone)]
     pub enum HandType {
         HighCard,
         OnePair,
@@ -46,11 +48,70 @@ mod parse {
     pub struct Hand {
         pub cards: [Card; 5],
         pub hand_type: HandType,
+        pub type_with_joker: Option<HandType>,
         pub bid: u32
     }
 
+    pub fn type_with_joker(hand_type: &HandType, cards: &Vec<Card>) -> HandType {
+        let joker_count: u8 = cards.iter()
+            .filter_map(|c| match c {
+                Card::Joker => Some(1),
+                _ => None
+            })
+            .sum();
+
+        match hand_type {
+            HandType::FourOfAKind  => match joker_count {
+                4 => HandType::FiveOfAKind, // must be 4 jokers, so other card makes it 5
+                1 => HandType::FiveOfAKind,
+                0 => hand_type.clone(),
+                _ => panic!("unexpected joker count {} in {:?}", joker_count, cards)
+            }
+            HandType::ThreeOfAKind => {
+                match joker_count {
+                    // the three cards must be jokers already, the other two cards must be different
+                    // otherwise we had FullHouse
+                    3 => HandType::FourOfAKind,
+                    2 => HandType::FiveOfAKind,
+                    1 => HandType::FourOfAKind,
+                    0 => hand_type.clone(),
+                    _ => panic!("unexpected joker count {} in {:?}", joker_count, cards)
+                }
+            }
+            HandType::TwoPairs => match joker_count {
+                2 => HandType::FourOfAKind,
+                1 => HandType::FullHouse,
+                0 => hand_type.clone(),
+                _ => panic!("unexpected joker count {} in {:?}", joker_count, cards)
+            },
+            HandType::OnePair => match joker_count {
+                3 => HandType::FiveOfAKind,
+                2 => HandType::ThreeOfAKind, // the two cards must be the joker, otherwise we had TwoPair
+                1 => HandType::ThreeOfAKind,
+                0 => hand_type.clone(),
+                _ => panic!("unexpected joker count {} in {:?}", joker_count, cards)
+            },
+            HandType::HighCard => match joker_count {
+                4 => HandType::FiveOfAKind,
+                3 => HandType::FourOfAKind,
+                2 => HandType::ThreeOfAKind,
+                1 => HandType::OnePair,
+                0 => hand_type.clone(),
+                _ => panic!("unexpected joker count {} in {:?}", joker_count, cards)
+            }
+            HandType::FullHouse  => match joker_count {
+                3 => HandType::FiveOfAKind,
+                2 => HandType::FiveOfAKind,
+                0 => hand_type.clone(),
+                _ => panic!("unexpected joker count {} in {:?}", joker_count, cards)
+            },
+            HandType::FiveOfAKind => hand_type.clone(), // hand is full, no way to improve it
+        }
+
+    }
+
     impl Hand {
-        pub fn new(cards: Vec<Card>, bid: u32) -> Self {
+        pub fn new(cards: Vec<Card>, bid: u32, with_joker: bool) -> Self {
             // get a copy of the cards as array for passing on
             let cards_org_order: [Card; 5] = cards.clone().try_into()
                 .expect("infallible");
@@ -70,13 +131,20 @@ mod parse {
                 (1, _) => HandType::HighCard,
                 (_ ,_) => panic!("Unexpected pair counts: {}/{}", longest, second_longest)
             };
+            let type_with_joker = if with_joker {
+                Some(type_with_joker(&hand_type, &cards))
+            } else {
+                None
+            };
 
             Hand {
                 cards: cards_org_order,
                 hand_type,
+                type_with_joker,
                 bid
             }
         }
+
     }
 
     impl PartialEq<Self> for Hand {
@@ -88,7 +156,14 @@ mod parse {
 
     impl PartialOrd for Hand {
         fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            let by_type = self.hand_type.cmp(&other.hand_type);
+            let by_type = if let Some(with_joker) = &self.type_with_joker {
+                let other_with_joker = other.type_with_joker.as_ref()
+                    .expect("other to have joker type");
+                with_joker.cmp(other_with_joker)
+            } else {
+                self.hand_type.cmp(&other.hand_type)
+            };
+
 
             match by_type {
                 Ordering::Less => Some(by_type),
@@ -128,6 +203,7 @@ mod parse {
                     Card::Four => write!(f, "4"),
                     Card::Three => write!(f, "3"),
                     Card::Two => write!(f, "2"),
+                    Card::Joker => write!(f, "*"),
                 }?;
             }
             Ok(())
@@ -140,12 +216,16 @@ mod parse {
         pub hands: Vec<Hand>
     }
 
-    pub fn parse_hand(hand: &str) -> Hand {
+    pub fn parse_hand(hand: &str, with_joker: bool) -> Hand {
         let parser = parser!(cards:{
             "A" => Card::Ass,
             "K" => Card::King,
             "Q" => Card::Queen,
-            "J" => Card::Jack,
+            "J" => if with_joker {
+                Card::Joker
+            } else {
+                Card::Jack
+            },
             "T" => Card::Ten,
             "9" => Card::Nine,
             "8" => Card::Eight,
@@ -157,16 +237,20 @@ mod parse {
             "2" => Card::Two
         }+);
 
-        Hand::new(parser.parse(hand).expect("valid hand"), 0)
+        Hand::new(parser.parse(hand).expect("valid hand"), 0, with_joker)
     }
 
 
-    pub fn parse_input(filename: &str) -> Result<Input> {
+    pub fn parse_input(filename: &str, with_joker: bool) -> Result<Input> {
         let parser = parser!(lines(cards:{
             "A" => Card::Ass,
             "K" => Card::King,
             "Q" => Card::Queen,
-            "J" => Card::Jack,
+            "J" => if with_joker {
+                Card::Joker
+            } else {
+                Card::Jack
+            },
             "T" => Card::Ten,
             "9" => Card::Nine,
             "8" => Card::Eight,
@@ -176,7 +260,7 @@ mod parse {
             "4" => Card::Four,
             "3" => Card::Three,
             "2" => Card::Two
-        }+ " " bid:u32 => Hand::new(cards, bid)));
+        }+ " " bid:u32 => Hand::new(cards, bid, with_joker)));
 
         let raw_data = read_to_string(filename)?;
         let hands = parser.parse(&raw_data).context("parse error")?;
@@ -185,32 +269,38 @@ mod parse {
     }
 }
 
-fn solve_part_1(filename: &str) -> Result<u32> {
-    let mut input = parse::parse_input(filename)?;
-
+fn solve_common(mut input: Input) -> Result<u32> {
     input.hands.sort();
 
     let mut total_winnings = 0_u32;
     for (idx, hand) in input.hands.iter().enumerate() {
-        println!("{} is rank {}", hand, &idx + 1);
+        if let Some(with_joker_type) = &hand.type_with_joker {
+            println!("{:?} {} is rank {} ", with_joker_type, hand, &idx + 1);
+        } else {
+            println!("{} is rank {} ", hand, &idx + 1);
+        }
         total_winnings += &hand.bid * (idx as u32 + 1);
     }
 
     Ok(total_winnings)
 }
 
-fn solve_part_2(filename: &str) -> Result<u32> {
-    let input = parse::parse_input(filename)?;
-    println!("{:?}", input);
+fn solve_part_1(filename: &str) -> Result<u32> {
+    let input = parse::parse_input(filename, false)?;
+    solve_common(input)
+}
 
-    todo!()
+fn solve_part_2(filename: &str) -> Result<u32> {
+    let input = parse::parse_input(filename, true)?;
+
+    solve_common(input)
 }
 
 fn main() -> Result<()> {
     simple_log::quick!("info");
 
-    info!("Result part 1: {}", solve_part_1("src/day_07/input.txt")?);
-    //info!("Result part 2: {}", solve_part_2("src/day_07/input.txt")?);
+    //info!("Result part 1: {}", solve_part_1("src/day_07/input.txt")?);
+    info!("Result part 2: {}", solve_part_2("src/day_07/input.txt")?);
     Ok(())
 }
 
@@ -218,7 +308,7 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use crate::{solve_part_1, solve_part_2};
-    use crate::parse::{HandType, parse_hand, parse_input};
+    use crate::parse::{HandType, parse_hand, parse_input, type_with_joker};
 
     #[test]
     fn solve_test_input_1() {
@@ -226,16 +316,16 @@ mod tests {
         assert_eq!(result, 6440);
     }
 
-    // #[test]
-    // fn solve_test_input_2() {
-    //     let result = solve_part_2("src/day_07/test_input.txt").unwrap();
-    //     assert_eq!(result, 42);
-    // }
+    #[test]
+    fn solve_test_input_2() {
+        let result = solve_part_2("src/day_07/test_input.txt").unwrap();
+        assert_eq!(result, 5905);
+    }
 
 
     #[test]
-    fn test_hand_type() {
-        let input = parse_input("src/day_07/test_input.txt").unwrap();
+    fn test_hand_type_part_1() {
+        let input = parse_input("src/day_07/test_input.txt", false).unwrap();
 
         assert_eq!(input.hands[0].hand_type, HandType::OnePair);
         assert_eq!(input.hands[1].hand_type, HandType::ThreeOfAKind);
@@ -244,17 +334,33 @@ mod tests {
         assert_eq!(input.hands[4].hand_type, HandType::ThreeOfAKind);
     }
 
-
     #[test]
-    fn test_tie_breaking() {
-        assert!(parse_hand("AAAAQ") > parse_hand("AAAAJ"));
-        assert!(parse_hand("AAAQQ") > parse_hand("AAAJJ"));
-        assert!(parse_hand("264AJ") < parse_hand("269J8"))
+    fn test_tie_breaking_part_1() {
+        assert!(parse_hand("AAAAQ", false) > parse_hand("AAAAJ", false));
+        assert!(parse_hand("AAAQQ", false) > parse_hand("AAAJJ", false));
+        assert!(parse_hand("264AJ", false) < parse_hand("269J8", false))
     }
 
     #[test]
-    fn hand_ordering() {
-        assert!(parse_hand("T55J5") > parse_hand("KTJJT"));
-        assert!(parse_hand("KK677") > parse_hand("KTJJT"));
+    fn hand_ordering_part_1() {
+        assert!(parse_hand("T55J5", false) > parse_hand("KTJJT", false));
+        assert!(parse_hand("KK677", false) > parse_hand("KTJJT", false));
+    }
+
+    #[test]
+    fn test_type_with_joker() {
+        let test_cases = vec![
+            ("T55J5", HandType::FourOfAKind),
+            ("T55J5", HandType::FourOfAKind),
+            ("KTJJT", HandType::FourOfAKind),
+            ("QQQJA", HandType::FourOfAKind),
+            ("KK677", HandType::TwoPairs),
+        ];
+
+        for (cards, expected_type) in test_cases {
+            let hand = parse_hand(cards, true);
+            assert_eq!(hand.type_with_joker.clone().unwrap(), expected_type,
+                       "{} has type {:?}, expected {:?}", hand, hand.type_with_joker, expected_type);
+        }
     }
 }
