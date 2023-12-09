@@ -34,3 +34,11 @@ The (Rust specific) things I learned each challenge:
 - Day 7:
   - How to implement (Part)Eq and (Partial)Ord
   - That I should take the AoC instructions absolutely literally and assume nothing
+
+- Day 8:
+  - Nothing Rust specific but I was waaaay stuck finding a solution until I talked to a coworker and then it clicked
+    I should have gotten a rubber duck
+
+- Day 9:
+  - Not trying to be overly clever and running into a corner and then refusing to come out. Sometimes the simple
+    approach is good enough.

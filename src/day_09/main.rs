@@ -1,6 +1,4 @@
-use std::collections::VecDeque;
-use anyhow::{anyhow, Context, Result};
-use itertools::rev;
+use anyhow::{Context, Result};
 
 #[macro_use]
 extern crate simple_log;
@@ -28,109 +26,58 @@ mod parse {
     }
 }
 
-//
-// pub struct DeltaIter<I> {
-//     inner: I
-// }
-//
-// impl<I> Iterator for DeltaIter<I> where I: Iterator<Item=u32> {
-//     type Item = I::Item;
-//
-//     fn next(&mut self) -> Option<Self::Item> {
-//         let last_0 = self.inner.next().expect("one more element");
-//         let last_1 = self.inner.next().expect("one more element");
-//
-//         println!(" yield {} - {} -> {}", last_0, last_1, last_0 - last_1);
-//
-//         Some(last_0 - last_1)
-//     }
-// }
+fn predict(dataset: Vec<i32>) -> Result<(i32, i32)> {
 
-fn predict_next(dataset: Vec<i32>) -> Result<i32> {
-    let last = dataset.last().expect("last element").clone();
-    let next = dataset.windows(2)
-        .map(|window| {
-            //println!("win {:?} -> {}", window, window[1] - window[0]);
-            window[1] - window[0]
-        })
+    // derive the next row from the different between items
+    let derived_row = dataset.windows(2)
+        .map(|window| window[1] - window[0])
         .collect::<Vec<i32>>();
 
+    let first = dataset.get(0).context("last element")?;
+    let last = dataset.last().context("last element")?;
+    let last_derived = derived_row.last().context("no last elem")?;
+    let first_derived = derived_row.first().context("no first elem")?;
 
-    //println!("{:?}, {}", next, last);
-
-    let mut rev_iter = next.iter().rev();
-    let last_next_0 = rev_iter.next().expect("last elem");
-
-    if next.iter().all(|v| v == &0) {
-        Ok(last + last_next_0)
+    if derived_row.iter().all(|v| v == &0) {
+        Ok((first - first_derived, last + last_derived))
     } else {
-        let child = predict_next(next.clone()).unwrap();
-        println!("{:?}...{}", next, child);
-
-        Ok(last + child)
+        let (predicted_prev, predicted_next) = predict(derived_row).unwrap();
+        Ok((first - predicted_prev, last + predicted_next))
     }
 }
 
-
-// too high: 2175229208
-// 2175229206
-fn solve_part_1(filename: &str) -> Result<i128> {
+fn solve_both_parts(filename: &str) -> Result<[i128; 2]> {
     let input = parse::parse_input(filename)?;
 
-    let mut total = 0_i128;
+    let mut total_next = 0_i128;
+    let mut total_prev = 0_i128;
     for dataset in input.datasets {
-        let next = predict_next(dataset.clone()).context("predict works")?;
-        println!("{:?}", dataset);
-        println!("---");
-        total += next as i128;
+        let (prev, next) = predict(dataset.clone()).context("predict works")?;
+        total_next += next as i128;
+        total_prev += prev as i128;
     }
 
-    Ok(total)
-}
-
-fn solve_part_2(filename: &str) -> Result<u32> {
-    let input = parse::parse_input(filename)?;
-    println!("{:?}", input);
-
-    todo!()
+    Ok([total_prev, total_next])
 }
 
 fn main() -> Result<()> {
     simple_log::quick!("info");
-    let r1 = solve_part_1("src/day_09/input.txt")?;
+    let [r2, r1] = solve_both_parts("src/day_09/input.txt")?;
     assert_eq!(2175229206, r1);
     info!("Result part 1: {}", r1);
-    //info!("Result part 2: {}", solve_part_2("src/day_09/input.txt")?);
+    info!("Result part 2: {}", r2);
     Ok(())
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::{predict_next, solve_part_1, solve_part_2};
+    use crate::{solve_both_parts};
 
     #[test]
-    fn solve_test_input_1() {
-        let result = solve_part_1("src/day_09/test_input.txt").unwrap();
-        assert_eq!(result, 114);
-    }
-
-    #[test]
-    fn solve_test_input_2() {
-        let result = solve_part_2("src/day_09/test_input.txt").unwrap();
-        assert_eq!(result, 42);
-    }
-
-    #[test]
-    fn test_predict_next() {
-        // assert_eq!(Some(8), predict_next(&vec![5, 6, 7]));
-        // assert_eq!(Some(10), predict_next(&vec![4, 6, 8]));
-        // assert_eq!(Some(40), predict_next(&vec![10, 20, 30]));
-
-        assert_eq!(18, predict_next(vec![0, 3, 6, 9, 12, 15]).unwrap());
-        println!("---");
-        assert_eq!(28, predict_next(vec![1, 3, 6, 10, 15, 21]).unwrap());
-        println!("---");
-        assert_eq!(68, predict_next(vec![10, 13, 16, 21, 30, 45]).unwrap());
+    fn solve_test_input() {
+        let [result_2, result_1] = solve_both_parts("src/day_09/test_input.txt").unwrap();
+        assert_eq!(result_1, 114);
+        assert_eq!(result_2, 2);
     }
 }
